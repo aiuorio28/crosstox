@@ -1,1 +1,190 @@
+% Plot biomass&toxicity for Cross-diffusion biomass-toxicity 1D (Fig. 2 in the paper)
 
+clear all
+close all
+tic
+Fig2=figure('Position',[50 50 300 300]);
+
+% System discretisation
+DeltaX=0.02;
+L=8;
+
+% Parameter values (fixed)
+g=10; 
+c=0.5;
+Rh=6;
+d=1; 
+k=1;
+DifR=3/0.9;
+DifT=0.05;
+
+% Parameter values (variable) gamma, s, sigma
+opt=[0.1 0 0.9*DifR; 0 0.5 0.9*DifR; 0.1 0.5 0; 0.1 0.5 0.9*DifR];
+
+% Number of grid cells
+m=L/DeltaX;
+NX=m;
+
+% Timesteps
+dt=0.00001;     % timestep
+Time=0;      % begin time
+EndTime=1000;    % end time 1500
+PlotStep=1; % Save variable value every n times
+PlotTime=PlotStep; % (d)
+
+% Vectors to store infos
+Rfin=zeros(length(opt),m);
+Tfin=zeros(length(opt),m);
+
+Parameter loops
+for index=1:size(opt,1)
+    gamma=opt(index,1);
+    s=opt(index,2);
+    sigma=opt(index,3);
+
+    Th=c*(d+s)*Rh/k;
+
+    % Simulation loop
+    Time=0;      % begin time
+    it=1;
+    PlotTime=PlotStep; % (d)
+
+    % Initialisation
+    R = zeros(1,m);
+    T = zeros(1,m);
+    dR=zeros(1,m);
+    dT= zeros(1,m);
+    NetR=zeros(1,m);
+    NetT=zeros(1,m);
+
+    %Boundary conditions
+    FXR = zeros(1,NX+1);
+    FXT = zeros(1,NX+1);
+
+    % Initial state
+    T(:)=0;
+    for i=1:m
+        %     R(i)=10*exp((-1/m)*(2*i-2*m/2)^2);
+        R(i)=10*exp((-1/(m*DeltaX))*(5*i*DeltaX-5*m*DeltaX/2)^2);
+    end
+    Rtot=sum(sum(R));
+
+    % condsigma(1)=DifR-sigma*max(T)/Th;
+
+    % Piecewise function t(T)
+    ff = @(x) (x/Th).*(x <= Th) + (1).*(x>Th);
+
+    % Timesteps
+    while Time<=EndTime,
+
+        % Reaction
+
+        dR= g*R.*(1-R/Rh)-(gamma*ff(T)).*R.*(1-R/Rh)-(d+s*ff(T)).*R;
+
+        dT= c*(d+s*ff(T)).*R-k*T;
+
+        % calculate Flow in x-direction : Flow = -D * DifR/dx;
+        FXR(2:NX)=-DifR*(R(2:NX)-R(1:NX-1))/DeltaX + sigma*(R(2:NX).*ff(T(2:NX))-R(1:NX-1).*ff(T(1:NX-1)))/DeltaX;
+        FXT(2:NX)=-DifT*(T(2:NX)-T(1:NX-1))/DeltaX;
+
+        % calculate netflow
+        NetR=FXR(1:NX)-FXR(2:NX+1);
+        NetT=FXT(1:NX)-FXT(2:NX+1);
+
+        % Update
+        R=R+(NetR/(DeltaX)+dR)*dt;
+        T=T+(NetT/(DeltaX)+dT)*dt;
+
+        Time=Time+dt;
+
+        Rseries(index,:)=R(:);
+        Tseries(index,:)=T(:);
+
+        it=it+1;
+
+    end
+
+    Rfin(index,:)=Rseries(index,:);
+    Tfin(index,:)=Tseries(index,:);
+    RRR = ['save MatrixSeriefin_1D_R_gamma=' num2str(gamma)  '_s=' num2str(s) '_sigma=' num2str(sigma) '.mat Rfin']; %Rseries
+    eval(RRR)
+
+    TTT = ['save MatrixSeriefin_1D_T_gamma=' num2str(gamma)  '_s=' num2str(s) '_sigma=' num2str(sigma) '.mat Tfin']; %Tseries
+    eval(TTT)
+end
+toc
+
+%% PLOT MAKER
+
+darkg = [0 0.5 0.4];
+
+lcol = {[0 0 0], [0 0 0], [0 0 0], [0 0 0]}; 
+lsty = {':','--','-.','-'}; % ..., '-.','--','-','-', ...
+
+for index=1:size(opt,1)
+    gamma=opt(index,1);
+    s=opt(index,2);
+    sigma=opt(index,3);
+
+    load(['MatrixSeriefin_1D_R_gamma=' num2str(gamma)  '_s=' num2str(s) '_sigma=' num2str(sigma) '.mat'])
+
+    RR=Rfin(index,:);
+
+    figure(1)
+    plot(RR,'Color',lcol{index},'linestyle',lsty{index},'LineWidth',1);
+    if index == 1
+        hold on
+    end
+    axis square;
+    axis([0 m 0 10])
+    set(get(gca,'ylabel'),'rotation',0)
+    xticks([0 m/4 2*m/4 3*m/4 m])
+    xticklabels({'0',(m/4)*DeltaX,(2*m/4)*DeltaX,(3*m/4)*DeltaX,m*DeltaX})
+    yticks([2 4 6 8 10])
+    ax=gca;
+    ax.FontSize = 14;
+end
+hold off;
+set(gcf,'Position',[100 100 500 500])
+
+h = get(gca,'Children');
+set(gca,'Children',[h(4) h(3) h(1) h(2)])
+
+legend('(i)','(ii)','(iii)','(iv)','Location','southeast')
+
+saveas(gcf,'comp_R.fig')
+saveas(gcf,'comp_R.png')
+
+for index=1:size(opt,1)
+    gamma=opt(index,1);
+    s=opt(index,2);
+    sigma=opt(index,3);
+
+    load(['MatrixSeriefin_1D_T_gamma=' num2str(gamma)  '_s=' num2str(s) '_sigma=' num2str(sigma) '.mat'])
+
+    TT=Tfin(index,:);
+
+    figure(2)
+    plot(TT,'Color',lcol{index},'linestyle',lsty{index},'LineWidth',1);
+    if index == 1
+        hold on
+    end
+    axis square;
+    axis([0 m 0 5])
+    set(get(gca,'ylabel'),'rotation',0)
+    xticks([0 m/4 2*m/4 3*m/4 m])
+    xticklabels({'0',(m/4)*DeltaX,(2*m/4)*DeltaX,(3*m/4)*DeltaX,m*DeltaX})
+    yticks([1 2 3 4 5])
+    ax=gca;
+    ax.FontSize = 14;
+end
+hold off;
+set(gcf,'Position',[100 100 500 500])
+
+h = get(gca,'Children');
+set(gca,'Children',[h(4) h(3) h(1) h(2)])
+
+legend('(i)','(ii)','(iii)','(iv)','Location','southeast')
+
+saveas(gcf,'comp_T.fig')
+saveas(gcf,'comp_T.png')
