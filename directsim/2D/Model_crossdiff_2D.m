@@ -1,0 +1,143 @@
+% Cross-diffusion biomass-toxicity 2D
+clear all
+close all
+
+% clear all
+% close all
+tic
+% Figure Settings [left, bottom, width, height]
+Fig=figure('Position',[50 50 600 300]);
+
+% System discretisation (see remark above)
+DeltaX=0.1; % (m)101
+DeltaY=0.1; % (m)
+L=8; %4
+
+% Parameter values
+g=10;
+c=0.5;
+Rh=6;
+d=1; 
+k=1;
+DifR=3.333; 
+DifT=0.05;
+
+gamma=0.1;
+s=0.5;
+sigma=3;
+
+% Number of grid cells
+m=L/DeltaX;
+NX=m;
+NY=m;
+
+% Timesteps
+dt=0.0005;     % timestep 
+Time=0;      % begin time
+EndTime=1000;    % end time
+PlotStep=10; % Save variable value every n times
+PlotTime=PlotStep; 
+
+% Tables
+condsigma=zeros(1,EndTime);
+it=1;
+
+% Initialisation
+R = zeros(m,m);
+T = zeros(m,m);
+dR=zeros(m,m);
+dT= zeros(m,m);
+NetR=zeros(m,m);
+NetT=zeros(m,m);
+
+%Boundary conditions
+FYR = zeros(NY+1,NX);   	% bound.con. no flow in/out to Y-direction
+FXR = zeros(NY,NX+1);		% bound.con. no flow in/out to X-direction
+FD1R = zeros(m+1,m+1);
+FD2R = zeros(m+1,m+1);
+FYT = zeros(NY+1,NX);   	% bound.con. no flow in/out to Y-direction
+FXT = zeros(NY,NX+1);		% bound.con. no flow in/out to X-direction
+FD1T = zeros(m+1,m+1);
+FD2T = zeros(m+1,m+1);
+
+% Initial state
+T(:,:)=0;
+for i=1:m
+    for j=1:m
+        R(m/2,m/2)=8;
+        R(m/4,m/1)=7;
+        R(m/1,m/4)=6;
+        R(m/5,m/4)=5;
+    end
+end
+Rtot=sum(sum(R));
+
+Th=c*(d+s)*Rh/k;
+while Time<=EndTime,
+    
+    % Reaction
+    
+    tT=min(max(0,T(:,:)./Th),1);
+    
+    dR= g*(1-gamma.*tT).*R.*(1-R/Rh)-(d+s.*tT).*R ;  
+    dT= c*(d+s.*tT).*R-k.*T;
+  
+    % calculate Flow in x-direction : Flow = -D * DifR/dx;
+    FXR(1:NY,2:NX)=-DifR*(R(:,2:NX)-R(:,1:NX-1))*DeltaY/DeltaX + sigma*(R(:,2:NX).*tT(:,2:NX)-R(:,1:NX-1).*tT(:,1:NX-1))*DeltaY/DeltaX;                         % [g.d-1]
+    FYR(2:NY,1:NX)=-DifR*(R(2:NY,:)-R(1:NY-1,:))*DeltaX/DeltaY + sigma*(R(2:NY,:).*tT(2:NY,:)-R(1:NY-1,:).*tT(1:NY-1,:))*DeltaX/DeltaY;                         % [g.d-1]
+    FD1R(2:NY,2:NX)=-DifR*(R(2:NY,2:NX)-R(1:NY-1,1:NX-1))*DeltaY/sqrt(2) + sigma*(R(2:NY,2:NX).*tT(2:NY,2:NX)-R(1:NY-1,1:NX-1).*tT(1:NY-1,1:NX-1))*DeltaY/sqrt(2);
+    FD2R(2:NY,2:NX)=-DifR*(R(2:NY,1:NX-1)-R(1:NY-1,2:NX))*DeltaX/sqrt(2) + sigma*(R(2:NY,1:NX-1).*tT(2:NY,1:NX-1)-R(1:NY-1,2:NX).*tT(1:NY-1,2:NX))*DeltaX/sqrt(2);
+
+    FXT(1:NY,2:NX)=-DifT*(T(:,2:NX)-T(:,1:NX-1))*DeltaY/DeltaX;
+    FYT(2:NY,1:NX)=-DifT*(T(2:NY,:)-T(1:NY-1,:))*DeltaX/DeltaY;
+        FD1T(2:NY,2:NX)=-DifT*(T(2:NY,2:NX)-T(1:NY-1,1:NX-1))*DeltaY/sqrt(2);
+        FD2T(2:NY,2:NX)=-DifT*(T(2:NY,1:NX-1)-T(1:NY-1,2:NX))*DeltaX/sqrt(2);
+    
+    % calculate netflow
+    NetR=FXR(1:NY,1:NX)-FXR(1:NY,2:NX+1)+FYR(1:NY,1:NX)-FYR(2:NY+1,1:NX)...
+        +FD1R(1:NY,1:NX)-FD1R(2:NY+1,2:NX+1)+FD2R(1:NY,2:NX+1)-FD2R(2:NY+1,1:NX);
+    NetT=FXT(1:NY,1:NX)-FXT(1:NY,2:NX+1)+FYT(1:NY,1:NX)-FYT(2:NY+1,1:NX)...
+        +FD1T(1:NY,1:NX)-FD1T(2:NY+1,2:NX+1)+FD2T(1:NY,2:NX+1)-FD2T(2:NY+1,1:NX);
+    
+    % Update
+    R=R+(NetR/(DeltaX*DeltaY)+dR)*dt;
+    T=T+(NetT/(DeltaX*DeltaY)+dT)*dt;
+    
+    it=it+1;
+    %condsigma(it)=DifR-sigma*max(max(T))/Th;
+    
+    Time=Time+dt;
+    %
+    PlotTime=PlotTime-dt;
+    if PlotTime<=0.00001,
+        figure(Fig)
+        ax(1)=subplot(1,2,1); 
+        imagesc (R); title(Time, 'Biomass $R$','FontSize',12,'Interpreter','latex');
+        caxis([0 10]);
+        axis square;
+        xlabel('$x$','FontSize',12,'Interpreter','latex')
+        ylabel('$y$','FontSize',12,'Interpreter','latex')
+        set(gca,'xtick',[],'ytick',[])
+        colormap(ax(1),flipud(summer));
+        colorbar;
+        drawnow;
+
+        ax(2)=subplot(1,2,2);
+        imagesc (T); title('Toxicity $T$','FontSize',12,'Interpreter','latex');
+        xR=sprintf('Time=%.1f',Time);
+        caxis([0 5])
+        colormap(ax(2),flipud(gray));
+        colorbar;
+        axis square;
+        xlabel('$x$','FontSize',12,'Interpreter','latex')
+        ylabel('$y$','FontSize',12,'Interpreter','latex')
+        set(gca,'xtick',[],'ytick',[])
+        drawnow;
+
+        
+        PlotTime=PlotStep;
+        saveas(gcf,['Fig gamma_' num2str(gamma) '  s_' num2str(s) '  sigma_' num2str(sigma) '  time' num2str(Time) '.fig']);
+        saveas(gcf,['Fig gamma_' num2str(gamma) '  s_' num2str(s) '  sigma_' num2str(sigma) '  time' num2str(Time) '.png']);
+        exportgraphics(gcf,['VideoFig gamma_' num2str(gamma) '  s_' num2str(s) '  sigma_' num2str(sigma) '.gif'],'Append',true);
+    end
+end
