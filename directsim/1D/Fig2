@@ -36,7 +36,7 @@ PlotTime=PlotStep; % (d)
 Rfin=zeros(length(opt),m);
 Tfin=zeros(length(opt),m);
 
-Parameter loops
+% Parameter loops
 for index=1:size(opt,1)
     gamma=opt(index,1);
     s=opt(index,2);
